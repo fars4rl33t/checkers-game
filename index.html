@@ -2,29 +2,64 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    // Применяем сохранённую тему СИНХРОННО, до отрисовки, чтобы избежать
+    // мигания дефолтной темой (FOUC) при перезагрузке страницы.
+    (function () {
+      try {
+        var saved = localStorage.getItem('checkersTheme');
+        document.documentElement.dataset.theme = saved || 'wood';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'wood';
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Русские шашки</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Общий градиент для SVG-короны дамки: подхватывает цвета текущей темы
+       через CSS-переменные, поэтому крону не нужно перерисовывать при смене темы. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="crownGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" style="stop-color:var(--king-crown-a)" />
+        <stop offset="55%" style="stop-color:var(--king-crown-b)" />
+        <stop offset="100%" style="stop-color:var(--king-crown-c)" />
+      </linearGradient>
+    </defs>
+  </svg>
+
   <div class="table-felt">
     <header class="header">
       <h1 class="title">Русские шашки</h1>
       <p class="subtitle">классическая доска · обязательное взятие</p>
     </header>
 
-    <section class="mode-panel" aria-label="Режим игры">
-      <div class="mode-options" role="radiogroup" aria-label="Выбор режима игры">
-        <label class="mode-option">
-          <input type="radio" name="gameMode" id="modePvc" value="pvc" checked />
-          <span>Игрок против Компьютера (Бот)</span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" name="gameMode" id="modePvp" value="pvp" />
-          <span>Игрок против Игрока (2 игрока за одним экраном)</span>
-        </label>
-      </div>
-    </section>
+    <div class="toolbar">
+      <section class="mode-panel" aria-label="Режим игры">
+        <div class="mode-options" role="radiogroup" aria-label="Выбор режима игры">
+          <label class="mode-option">
+            <input type="radio" name="gameMode" id="modePvc" value="pvc" checked />
+            <span>Игрок против Компьютера (Бот)</span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="gameMode" id="modePvp" value="pvp" />
+            <span>Игрок против Игрока (2 игрока за одним экраном)</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="theme-panel" aria-label="Тема оформления">
+        <label class="theme-label" for="themeSelect">Тема</label>
+        <select id="themeSelect" class="theme-select" aria-label="Выбор темы оформления">
+          <option value="wood">Классическое дерево</option>
+          <option value="cyberpunk">Неоновый Киберпанк</option>
+          <option value="scandi">Скандинавский минимализм</option>
+        </select>
+      </section>
+    </div>
 
     <main class="game">
       <section class="status-panel" aria-live="polite">
@@ -40,14 +75,20 @@
 
       <section class="board-wrap">
         <div class="board-and-history">
-          <div class="board-with-coords">
-            <div class="file-labels" aria-hidden="true">
+          <div class="board-frame">
+            <div class="files-row files-top" aria-hidden="true">
               <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
             </div>
-            <div class="rank-labels" aria-hidden="true">
+            <div class="ranks-col ranks-left" aria-hidden="true">
               <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
             </div>
             <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
+            <div class="ranks-col ranks-right" aria-hidden="true">
+              <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            </div>
+            <div class="files-row files-bottom" aria-hidden="true">
+              <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+            </div>
           </div>
 
           <aside class="history-panel" aria-label="История ходов">
