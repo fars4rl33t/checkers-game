@@ -17,6 +17,7 @@
   --black-piece-shadow: #0c0806;
   --danger: #a5473a;
   --move-glow: rgba(201, 162, 75, 0.55);
+  --board-border: clamp(6px, 1.6vw, 10px);
 }
 
 * {
@@ -65,7 +66,7 @@ html, body {
 
 .game {
   width: 100%;
-  max-width: 620px;
+  max-width: 840px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -126,26 +127,160 @@ html, body {
   color: rgba(245, 236, 217, 0.85);
 }
 
-/* ---------- Board ---------- */
+/* ---------- Board + coordinates + history ---------- */
 .board-wrap {
   width: 100%;
   display: flex;
   justify-content: center;
 }
 
-.board {
+.board-and-history {
+  width: 100%;
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* 2x2 grid: [corner, file-labels] / [rank-labels, board] — гарантирует
+   точное совпадение координатных подписей с колонками/рядами доски. */
+.board-with-coords {
+  display: grid;
+  grid-template-columns: 1.35rem 1fr;
+  grid-template-rows: 1.35rem 1fr;
+  gap: 0.3rem;
   width: min(100%, 560px);
+  flex: 0 1 560px;
+}
+
+.file-labels {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  padding: 0 var(--board-border);
+}
+
+.rank-labels {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  padding: var(--board-border) 0;
+}
+
+.file-labels span,
+.rank-labels span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(245, 236, 217, 0.55);
+}
+
+.board {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
   aspect-ratio: 1 / 1;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   grid-template-rows: repeat(8, 1fr);
-  border: clamp(6px, 1.6vw, 10px) solid var(--wood-dark);
+  border: var(--board-border) solid var(--wood-dark);
   border-radius: 6px;
   box-shadow:
     0 0 0 4px var(--wood-light),
     0 18px 40px rgba(0, 0, 0, 0.55),
     inset 0 0 0 1px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+}
+
+/* ---------- Move history panel ---------- */
+.history-panel {
+  flex: 0 0 210px;
+  max-width: 220px;
+  max-height: min(560px, 65vh);
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.history-title {
+  margin: 0 0 0.5rem;
+  font-family: 'Playfair Display', serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(245, 236, 217, 0.65);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.22rem 0.35rem;
+  border-radius: 4px;
+}
+
+.history-list li:nth-child(odd) {
+  background: rgba(245, 236, 217, 0.045);
+}
+
+.history-move-num {
+  color: var(--brass-bright);
+  font-weight: 700;
+  min-width: 1.5rem;
+}
+
+.history-white,
+.history-black {
+  color: rgba(245, 236, 217, 0.9);
+  flex: 1;
+}
+
+.history-black {
+  color: rgba(245, 236, 217, 0.65);
+}
+
+.history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: rgba(201, 162, 75, 0.4);
+  border-radius: 999px;
+}
+
+@media (max-width: 700px) {
+  .board-and-history {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .history-panel {
+    width: 100%;
+    max-width: min(100%, 560px);
+    max-height: 220px;
+  }
 }
 
 .cell {
@@ -190,8 +325,14 @@ html, body {
   box-shadow: 0 0 14px 3px rgba(165, 71, 58, 0.7);
 }
 
-.cell.last-move {
-  box-shadow: inset 0 0 0 3px rgba(201, 162, 75, 0.55);
+.cell.last-move::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 2px dashed rgba(232, 196, 113, 0.85);
+  border-radius: 4px;
+  background: rgba(232, 196, 113, 0.14);
+  pointer-events: none;
 }
 
 /* ---------- Pieces ---------- */
@@ -200,7 +341,7 @@ html, body {
   height: 78%;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition: transform 0.2s ease-in-out;
   display: flex;
   align-items: center;
   justify-content: center;
