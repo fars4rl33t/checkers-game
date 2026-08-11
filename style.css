@@ -1,0 +1,389 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --felt: #1f2a22;
+  --felt-dark: #172019;
+  --wood-dark: #4a2c1c;
+  --wood-light: #e8d5b0;
+  --cell-light: #f1e2c2;
+  --cell-dark: #7a4a2b;
+  --brass: #c9a24b;
+  --brass-bright: #e8c471;
+  --ivory: #f5ecd9;
+  --ink: #241a12;
+  --white-piece: #f4ecdc;
+  --white-piece-shadow: #b8a583;
+  --black-piece: #241a14;
+  --black-piece-shadow: #0c0806;
+  --danger: #a5473a;
+  --move-glow: rgba(201, 162, 75, 0.55);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at 50% 0%, #24382c 0%, var(--felt) 55%, var(--felt-dark) 100%);
+  font-family: 'Inter', sans-serif;
+  color: var(--ivory);
+}
+
+.table-felt {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 2rem) 3rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 800;
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  margin: 0;
+  color: var(--brass-bright);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 236, 217, 0.6);
+}
+
+.game {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+/* ---------- Status panel: brass plate ---------- */
+.status-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.status-plate {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: linear-gradient(180deg, #2c1d13 0%, #1c130c 100%);
+  border: 1px solid rgba(201, 162, 75, 0.4);
+  border-radius: 999px;
+  padding: 0.55rem 1.4rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.turn-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--white-piece), var(--white-piece-shadow));
+  box-shadow: 0 0 0 2px rgba(201, 162, 75, 0.55), 0 2px 4px rgba(0, 0, 0, 0.5);
+  transition: background 0.25s ease;
+}
+
+.turn-indicator.black {
+  background: radial-gradient(circle at 35% 30%, #4a4038, var(--black-piece-shadow));
+}
+
+.status-text {
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.score-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.score-chip {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(245, 236, 217, 0.08);
+  border: 1px solid rgba(245, 236, 217, 0.15);
+  color: rgba(245, 236, 217, 0.85);
+}
+
+/* ---------- Board ---------- */
+.board-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.board {
+  width: min(100%, 560px);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  border: clamp(6px, 1.6vw, 10px) solid var(--wood-dark);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 4px var(--wood-light),
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell.light {
+  background-color: var(--cell-light);
+}
+
+.cell.dark {
+  background-color: var(--cell-dark);
+}
+
+.cell.dark.selectable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(201, 162, 75, 0.18);
+}
+
+.cell.dark.selected {
+  box-shadow: inset 0 0 0 3px var(--brass-bright);
+}
+
+.cell.dark.legal-move::before {
+  content: "";
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: var(--move-glow);
+  box-shadow: 0 0 12px 2px var(--move-glow);
+}
+
+.cell.dark.legal-capture::before {
+  background: var(--danger);
+  box-shadow: 0 0 14px 3px rgba(165, 71, 58, 0.7);
+}
+
+.cell.last-move {
+  box-shadow: inset 0 0 0 3px rgba(201, 162, 75, 0.55);
+}
+
+/* ---------- Pieces ---------- */
+.piece {
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.piece:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.piece.white {
+  background: radial-gradient(circle at 32% 28%, var(--white-piece) 0%, var(--white-piece-shadow) 78%);
+  box-shadow: 0 3px 0 rgba(90, 75, 50, 0.8), 0 5px 8px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.piece.black {
+  background: radial-gradient(circle at 32% 28%, #3c332c 0%, var(--black-piece-shadow) 80%);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.85), 0 5px 8px rgba(0, 0, 0, 0.55), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+.piece.king::after {
+  content: "♛";
+  font-size: 1.05rem;
+  color: var(--brass-bright);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.piece.white.king::after {
+  color: #8a6a1f;
+}
+
+/* Двойной контур — дополнительный визуальный признак дамки помимо короны */
+.piece.king::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 2px solid var(--brass-bright);
+  pointer-events: none;
+}
+
+.piece.white.king::before {
+  border-color: #8a6a1f;
+}
+
+.piece.no-drag {
+  cursor: default;
+}
+
+/* "Турецкий удар": фигура срублена в рамках текущего хода, но ещё
+   физически на доске — приглушаем и помечаем красным контуром до
+   момента её итогового удаления по завершении хода. */
+.piece.hit {
+  opacity: 0.4;
+  filter: grayscale(65%);
+  box-shadow: inset 0 0 0 3px rgba(214, 62, 62, 0.75), 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.2s ease;
+}
+
+/* ---------- Mode switch ---------- */
+.mode-panel {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.mode-options {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  border-radius: 999px;
+  padding: 0.35rem;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ivory);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mode-option:has(input:checked) {
+  background: linear-gradient(180deg, var(--brass-bright), var(--brass));
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.mode-option input[type="radio"] {
+  accent-color: var(--brass-bright);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .mode-option {
+    font-size: 0.72rem;
+    padding: 0.35rem 0.6rem;
+  }
+}
+
+/* ---------- Controls ---------- */
+.controls {
+  display: flex;
+  justify-content: center;
+}
+
+.restart-btn {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--brass-bright), var(--brass));
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.8rem;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #8a6a1f, 0 8px 16px rgba(0, 0, 0, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.restart-btn:hover {
+  filter: brightness(1.05);
+}
+
+.restart-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #8a6a1f, 0 3px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Footer ---------- */
+.footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  max-width: 520px;
+}
+
+.footer p {
+  font-size: 0.75rem;
+  color: rgba(245, 236, 217, 0.45);
+  line-height: 1.5;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 420px) {
+  .status-text {
+    font-size: 0.88rem;
+  }
+  .piece.king::after {
+    font-size: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piece,
+  .restart-btn {
+    transition: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
+}
+
+.status-text.shake {
+  animation: shake 0.4s ease;
+  color: var(--danger);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
