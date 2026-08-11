@@ -19,6 +19,7 @@
   const restartBtn = document.getElementById('restartBtn');
   const modePvpRadio = document.getElementById('modePvp');
   const modePvcRadio = document.getElementById('modePvc');
+  const historyListEl = document.getElementById('historyList');
 
   /**
    * Двумерный массив 8x8, представляющий состояние доски.
@@ -84,6 +85,26 @@
   /** Идентификатор setTimeout хода бота — нужен, чтобы отменить фантомный ход при рестарте/смене режима. */
   let botMoveTimeoutId = null;
 
+  /**
+   * История ходов в шахматно-шашечной нотации: [{player:'white'|'black', notation:string}, ...].
+   * Пара (белые, чёрные) отображается в панели "История ходов" одной строкой с номером хода.
+   */
+  let moveHistory = [];
+
+  /**
+   * Клетки, через которые прошла фигура В РАМКАХ ТЕКУЩЕГО ХОДА (начиная с
+   * исходной), в порядке посещения — используется для построения нотации
+   * хода целиком (включая серию взятий).
+   */
+  let currentMoveSquares = [];
+
+  /**
+   * {fromRow, fromCol, toRow, toCol} последнего применённого прыжка, для
+   * которого нужно проиграть плавную FLIP-анимацию при следующей отрисовке.
+   * Сбрасывается сразу после использования в renderBoard().
+   */
+  let pendingAnimation = null;
+
   // ---------- Вспомогательные функции по типу фигуры ----------
 
   function isWhite(piece) {
@@ -132,6 +153,23 @@
   /** Направление "вперёд" для простой шашки: белые к row 0, чёрные к row 7. */
   function forwardDir(color) {
     return color === 'white' ? -1 : 1;
+  }
+
+  /**
+   * Шашечная нотация клетки в стиле "a1"-"h8": колонки a-h слева направо,
+   * ряды 1-8 снизу вверх (со стороны белых) — совпадает со стандартной
+   * записью ходов в русских шашках, напр. "e3-d4".
+   */
+  function squareNotation(row, col) {
+    return String.fromCharCode(97 + col) + (SIZE - row);
+  }
+
+  /**
+   * Строит нотацию целого хода (простого или серии взятий) по списку
+   * посещённых клеток: "e3-d4" для простого хода, "b4xd6xf8" для серии боя.
+   */
+  function buildMoveNotation(squares, wasCapture) {
+    return squares.map(s => squareNotation(s.row, s.col)).join(wasCapture ? 'x' : '-');
   }
 
   /** Создаёт независимую копию доски для "проб" ходов (используется ИИ бота). */
@@ -582,11 +620,15 @@
     const piece = board[fromRow][fromCol];
 
     // Первый прыжок хода (не продолжение серии) — фиксируем начало хода
-    // и тип фигуры, которой он начат (для правила ничьей).
+    // и тип фигуры, которой он начат (для правила ничьей и нотации).
     if (!activeChainPiece) {
       moveOrigin = { row: fromRow, col: fromCol };
       turnMovedPieceWasMan = !isKing(piece);
+      currentMoveSquares = [{ row: fromRow, col: fromCol }];
     }
+
+    // Запоминаем прыжок для плавной FLIP-анимации при следующей отрисовке.
+    pendingAnimation = { fromRow, fromCol, toRow: target.row, toCol: target.col };
 
     board[fromRow][fromCol] = EMPTY;
     if (target.captured) {
@@ -601,6 +643,7 @@
     board[target.row][target.col] = piece;
 
     promoteIfNeeded(board, target.row, target.col);
+    currentMoveSquares.push({ row: target.row, col: target.col });
 
     const wasCapture = !!target.captured;
 
@@ -632,6 +675,17 @@
       board[r][c] = EMPTY;
     }
     hitCells.clear();
+
+    // Запись хода в историю (шашечная нотация) — используем turnHasCaptured
+    // и currentPlayer ДО их сброса/переключения ниже.
+    if (currentMoveSquares.length > 1) {
+      moveHistory.push({
+        player: currentPlayer,
+        notation: buildMoveNotation(currentMoveSquares, turnHasCaptured)
+      });
+      renderMoveHistory();
+    }
+    currentMoveSquares = [];
 
     // Правило ничьей: считаем полуходы без взятия в эндшпиле "дамка против дамки".
     // Счётчик сбрасывается ЛЮБЫМ взятием, ходом простой шашки, либо если на доске
@@ -790,8 +844,24 @@
    * Отрисовывает доску 8x8 в DOM на основе текущего массива board.
    * Подсвечивает выбранную фигуру, доступные простые ходы (жёлтая точка)
    * и клетки взятия (красная точка), рисует корону и двойной контур у дамок.
+   * Если задан pendingAnimation (сразу после хода), проигрывает плавную
+   * FLIP-анимацию перемещения фигуры от старой клетки к новой вместо
+   * мгновенной перерисовки.
    */
   function renderBoard() {
+    // FLIP-анимация, шаг 1 ("First"): запоминаем экранные координаты
+    // фигуры на ЕЁ СТАРОЙ позиции, пока старый DOM ещё не уничтожен.
+    let flipStartRect = null;
+    if (pendingAnimation) {
+      const fromCell = boardEl.querySelector(
+        `.cell[data-row="${pendingAnimation.fromRow}"][data-col="${pendingAnimation.fromCol}"]`
+      );
+      const fromPieceEl = fromCell && fromCell.querySelector('.piece');
+      if (fromPieceEl && typeof fromPieceEl.getBoundingClientRect === 'function') {
+        flipStartRect = fromPieceEl.getBoundingClientRect();
+      }
+    }
+
     boardEl.innerHTML = '';
 
     for (let row = 0; row < SIZE; row++) {
@@ -835,10 +905,73 @@
       }
     }
 
+    // FLIP-анимация, шаги 2-4 ("Last, Invert, Play"): сравниваем новую
+    // позицию фигуры со старой и плавно "доигрываем" разницу через transform,
+    // вместо мгновенного визуального скачка при перерисовке доски.
+    if (pendingAnimation && flipStartRect) {
+      const toCell = boardEl.querySelector(
+        `.cell[data-row="${pendingAnimation.toRow}"][data-col="${pendingAnimation.toCol}"]`
+      );
+      const toPieceEl = toCell && toCell.querySelector('.piece');
+      if (toPieceEl && typeof toPieceEl.getBoundingClientRect === 'function') {
+        const endRect = toPieceEl.getBoundingClientRect();
+        const dx = flipStartRect.left - endRect.left;
+        const dy = flipStartRect.top - endRect.top;
+        if (dx !== 0 || dy !== 0) {
+          toPieceEl.style.transition = 'none';
+          toPieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+          // Форсируем reflow, чтобы браузер применил стартовое положение
+          // ДО того, как мы включим transition обратно.
+          void toPieceEl.offsetWidth;
+          toPieceEl.style.transition = '';
+          toPieceEl.style.transform = '';
+        }
+      }
+    }
+    pendingAnimation = null;
+
     whiteCountEl.textContent = `Белые: ${countPieces(board, 'white')}`;
     blackCountEl.textContent = `Чёрные: ${countPieces(board, 'black')}`;
     turnIndicator.classList.toggle('black', currentPlayer === 'black');
     updateStatusText();
+  }
+
+  /**
+   * Перерисовывает панель "История ходов": группирует ходы парами
+   * (белые + чёрные) под общим номером хода, например "1. e3-d4 d6-c5".
+   * Автоматически прокручивает список к последнему добавленному ходу.
+   */
+  function renderMoveHistory() {
+    historyListEl.innerHTML = '';
+
+    for (let i = 0; i < moveHistory.length; i += 2) {
+      const moveNumber = i / 2 + 1;
+      const whiteEntry = moveHistory[i];
+      const blackEntry = moveHistory[i + 1];
+
+      const li = document.createElement('li');
+
+      const numSpan = document.createElement('span');
+      numSpan.className = 'history-move-num';
+      numSpan.textContent = `${moveNumber}.`;
+      li.appendChild(numSpan);
+
+      const whiteSpan = document.createElement('span');
+      whiteSpan.className = 'history-white';
+      whiteSpan.textContent = whiteEntry ? whiteEntry.notation : '';
+      li.appendChild(whiteSpan);
+
+      if (blackEntry) {
+        const blackSpan = document.createElement('span');
+        blackSpan.className = 'history-black';
+        blackSpan.textContent = blackEntry.notation;
+        li.appendChild(blackSpan);
+      }
+
+      historyListEl.appendChild(li);
+    }
+
+    historyListEl.scrollTop = historyListEl.scrollHeight;
   }
 
   function restart() {
@@ -861,9 +994,13 @@
     lastMove = null;
     moveMadeThisGame = false;
     hitCells.clear();
+    moveHistory = [];
+    currentMoveSquares = [];
+    pendingAnimation = null;
     statusText.classList.remove('shake');
     clearSelection();
     computeMustCapture();
+    renderMoveHistory();
     renderBoard();
     // Партия всегда начинается ходом белых, поэтому бот здесь не запускается сразу.
   }
