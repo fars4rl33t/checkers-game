@@ -74,26 +74,50 @@
       </section>
 
       <section class="board-wrap">
-        <div class="board-and-history">
-          <div class="board-frame">
-            <div class="files-row files-top" aria-hidden="true">
-              <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+        <div class="dashboard">
+          <aside class="player-panel player-panel-white" aria-label="Панель белых">
+            <div class="player-panel-head">
+              <span class="player-swatch player-swatch-white" aria-hidden="true"></span>
+              <div>
+                <h3 class="player-name" id="whitePlayerName">Белые</h3>
+                <p class="player-status" id="whiteStatus">Ходит…</p>
+              </div>
             </div>
-            <div class="ranks-col ranks-left" aria-hidden="true">
-              <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            <div class="graveyard" id="graveyardWhite" aria-label="Срубленные чёрные фигуры"></div>
+          </aside>
+
+          <div class="board-and-history">
+            <div class="board-frame">
+              <div class="files-row files-top" aria-hidden="true">
+                <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+              </div>
+              <div class="ranks-col ranks-left" aria-hidden="true">
+                <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+              </div>
+              <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
+              <div class="ranks-col ranks-right" aria-hidden="true">
+                <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+              </div>
+              <div class="files-row files-bottom" aria-hidden="true">
+                <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+              </div>
             </div>
-            <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
-            <div class="ranks-col ranks-right" aria-hidden="true">
-              <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
-            </div>
-            <div class="files-row files-bottom" aria-hidden="true">
-              <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
-            </div>
+
+            <aside class="history-panel" aria-label="История ходов">
+              <h2 class="history-title">История ходов</h2>
+              <ol class="history-list" id="historyList"></ol>
+            </aside>
           </div>
 
-          <aside class="history-panel" aria-label="История ходов">
-            <h2 class="history-title">История ходов</h2>
-            <ol class="history-list" id="historyList"></ol>
+          <aside class="player-panel player-panel-black" aria-label="Панель чёрных">
+            <div class="player-panel-head">
+              <span class="player-swatch player-swatch-black" aria-hidden="true"></span>
+              <div>
+                <h3 class="player-name" id="blackPlayerName">Чёрные (Бот)</h3>
+                <p class="player-status" id="blackStatus">Ожидает</p>
+              </div>
+            </div>
+            <div class="graveyard" id="graveyardBlack" aria-label="Срубленные белые фигуры"></div>
           </aside>
         </div>
       </section>
@@ -106,6 +130,35 @@
     <footer class="footer">
       <p>Мужская шашка бьёт вперёд и назад · дамка ходит и бьёт на любое число клеток по диагонали</p>
     </footer>
+  </div>
+
+  <!-- Праздничное модальное окно победы/ничьей -->
+  <div class="modal-overlay" id="victoryModal" aria-hidden="true">
+    <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h2 class="modal-title" id="modalTitle">Победа!</h2>
+      <p class="modal-subtitle" id="modalSubtitle">Партия завершена.</p>
+
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <span class="modal-stat-value" id="modalMoveCount">0</span>
+          <span class="modal-stat-label">ходов сделано</span>
+        </div>
+        <div class="modal-stat">
+          <span class="modal-stat-value" id="modalWhiteCaptures">0</span>
+          <span class="modal-stat-label">срублено белыми</span>
+        </div>
+        <div class="modal-stat">
+          <span class="modal-stat-value" id="modalBlackCaptures">0</span>
+          <span class="modal-stat-label">срублено чёрными</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="modalRematchBtn" class="modal-btn modal-btn-primary" type="button">Реванш (Новая игра)</button>
+        <button id="modalCloseBtn" class="modal-btn modal-btn-secondary" type="button">Закрыть (Осмотреть доску)</button>
+      </div>
+    </div>
   </div>
 
   <script src="script.js"></script>
