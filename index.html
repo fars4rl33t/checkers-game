@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Русские шашки</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="table-felt">
+    <header class="header">
+      <h1 class="title">Русские шашки</h1>
+      <p class="subtitle">классическая доска · обязательное взятие</p>
+    </header>
+
+    <section class="mode-panel" aria-label="Режим игры">
+      <div class="mode-options" role="radiogroup" aria-label="Выбор режима игры">
+        <label class="mode-option">
+          <input type="radio" name="gameMode" id="modePvc" value="pvc" checked />
+          <span>Игрок против Компьютера (Бот)</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="gameMode" id="modePvp" value="pvp" />
+          <span>Игрок против Игрока (2 игрока за одним экраном)</span>
+        </label>
+      </div>
+    </section>
+
+    <main class="game">
+      <section class="status-panel" aria-live="polite">
+        <div class="status-plate">
+          <span class="turn-indicator" id="turnIndicator" aria-hidden="true"></span>
+          <span class="status-text" id="statusText">Ход белых</span>
+        </div>
+        <div class="score-row">
+          <div class="score-chip" id="whiteCount">Белые: 12</div>
+          <div class="score-chip" id="blackCount">Чёрные: 12</div>
+        </div>
+      </section>
+
+      <section class="board-wrap">
+        <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
+      </section>
+
+      <section class="controls">
+        <button id="restartBtn" class="restart-btn" type="button">Перезапуск</button>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Мужская шашка бьёт вперёд и назад · дамка ходит и бьёт на любое число клеток по диагонали</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
