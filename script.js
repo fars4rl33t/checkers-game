@@ -21,6 +21,22 @@
   const modePvcRadio = document.getElementById('modePvc');
   const themeSelect = document.getElementById('themeSelect');
   const historyListEl = document.getElementById('historyList');
+  const whiteStatusEl = document.getElementById('whiteStatus');
+  const blackStatusEl = document.getElementById('blackStatus');
+  const blackPlayerNameEl = document.getElementById('blackPlayerName');
+  const whitePlayerPanelEl = document.querySelector('.player-panel-white');
+  const blackPlayerPanelEl = document.querySelector('.player-panel-black');
+  const graveyardWhiteEl = document.getElementById('graveyardWhite');
+  const graveyardBlackEl = document.getElementById('graveyardBlack');
+  const victoryModalEl = document.getElementById('victoryModal');
+  const modalTitleEl = document.getElementById('modalTitle');
+  const modalSubtitleEl = document.getElementById('modalSubtitle');
+  const modalMoveCountEl = document.getElementById('modalMoveCount');
+  const modalWhiteCapturesEl = document.getElementById('modalWhiteCaptures');
+  const modalBlackCapturesEl = document.getElementById('modalBlackCaptures');
+  const modalRematchBtn = document.getElementById('modalRematchBtn');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const confettiCanvas = document.getElementById('confettiCanvas');
 
   /**
    * Двумерный массив 8x8, представляющий состояние доски.
@@ -105,6 +121,21 @@
    * Сбрасывается сразу после использования в renderBoard().
    */
   let pendingAnimation = null;
+
+  /**
+   * "Кладбище" срубленных фигур по игрокам: graveyard.white — фигуры,
+   * СРУБЛЕННЫЕ БЕЛЫМИ (то есть чёрные трофеи в панели белого игрока), и
+   * наоборот для graveyard.black. Каждая запись — {king: boolean}.
+   */
+  let graveyard = { white: [], black: [] };
+
+  /**
+   * Set ключей "row,col" тех "побитых" (см. hitCells) клеток, для которых
+   * анимация уменьшения/растворения уже была проиграна — чтобы при
+   * повторных перерисовках в рамках одной серии взятий анимация не
+   * запускалась заново для уже скрытых фигур.
+   */
+  let hitCellsAnimated = new Set();
 
   // ---------- Вспомогательные функции по типу фигуры ----------
 
@@ -638,8 +669,14 @@
       // после завершения ВСЕГО хода, в endTurn(). До этого момента фигура
       // остаётся на доске как непроходимое препятствие и не может быть
       // срублена повторно (см. isHit() в getManCaptureMoves/getKingCaptureMoves).
+      const capturedValue = board[target.captured.row][target.captured.col];
       hitCells.add(cellKey(target.captured.row, target.captured.col));
       turnHasCaptured = true;
+
+      // Кладбище: трофей добавляется в панель ТЕКУЩЕГО игрока (мовера) —
+      // currentPlayer здесь ещё не переключён на соперника.
+      graveyard[currentPlayer].push({ king: isKing(capturedValue) });
+      appendGraveyardPiece(currentPlayer, isKing(capturedValue));
     }
     board[target.row][target.col] = piece;
 
@@ -676,6 +713,7 @@
       board[r][c] = EMPTY;
     }
     hitCells.clear();
+    hitCellsAnimated.clear();
 
     // Запись хода в историю (шашечная нотация) — используем turnHasCaptured
     // и currentPlayer ДО их сброса/переключения ниже.
@@ -729,27 +767,47 @@
     const blackCount = countPieces(board, 'black');
 
     if (whiteCount === 0) {
-      gameOver = true;
-      statusText.textContent = 'Чёрные победили! У белых не осталось фигур.';
+      finishGame({ type: 'win', winner: 'black', reason: 'no-pieces' });
       return;
     }
     if (blackCount === 0) {
-      gameOver = true;
-      statusText.textContent = 'Белые победили! У чёрных не осталось фигур.';
+      finishGame({ type: 'win', winner: 'white', reason: 'no-pieces' });
       return;
     }
     if (noCaptureKingsOnlyPlies >= DRAW_PLIES_LIMIT) {
-      gameOver = true;
-      statusText.textContent = `Ничья! ${DRAW_PLIES_LIMIT} ходов подряд без взятия — на доске остались только дамки.`;
+      finishGame({ type: 'draw', reason: 'kings-draw' });
       return;
     }
     if (!playerHasAnyMove(board, currentPlayer)) {
-      gameOver = true;
-      const winner = currentPlayer === 'white' ? 'Чёрные' : 'Белые';
-      const loser = currentPlayer === 'white' ? 'у белых' : 'у чёрных';
-      statusText.textContent = `${winner} победили! Нет доступных ходов (${loser}).`;
+      const winner = currentPlayer === 'white' ? 'black' : 'white';
+      finishGame({ type: 'win', winner, reason: 'stalemate' });
       return;
     }
+  }
+
+  /** Строит текст для основной статус-строки по итогу игры (win/draw). */
+  function buildResultStatusText(result) {
+    if (result.type === 'draw') {
+      return `Ничья! ${DRAW_PLIES_LIMIT} ходов подряд без взятия — на доске остались только дамки.`;
+    }
+    const winnerLabel = result.winner === 'white' ? 'Белые' : 'Чёрные';
+    const loserPhrase = result.winner === 'white' ? 'у чёрных' : 'у белых';
+    if (result.reason === 'no-pieces') {
+      const loserSubjectCapitalized = result.winner === 'white' ? 'У чёрных' : 'У белых';
+      return `${winnerLabel} победили! ${loserSubjectCapitalized} не осталось фигур.`;
+    }
+    return `${winnerLabel} победили! Нет доступных ходов (${loserPhrase}).`;
+  }
+
+  /**
+   * Единая точка завершения партии: помечает игру завершённой, обновляет
+   * основную статус-строку и открывает праздничное модальное окно
+   * (вместо alert()) со статистикой и конфетти.
+   */
+  function finishGame(result) {
+    gameOver = true;
+    statusText.textContent = buildResultStatusText(result);
+    openVictoryModal(result);
   }
 
   // ---------- Обработка кликов ----------
@@ -890,6 +948,24 @@
   }
 
   /**
+   * Добавляет миниатюрную 3D-копию срубленной фигуры в панель "кладбища"
+   * соответствующего игрока. capturerColor — цвет игрока, который срубил
+   * (панель, куда добавляется трофей); сама фигура — цвета СОПЕРНИКА.
+   */
+  function appendGraveyardPiece(capturerColor, wasKing) {
+    const container = capturerColor === 'white' ? graveyardWhiteEl : graveyardBlackEl;
+    if (!container) return;
+    const capturedColor = capturerColor === 'white' ? 'black' : 'white';
+
+    const el = document.createElement('div');
+    el.className = `graveyard-piece piece ${capturedColor}${wasKing ? ' king' : ''} mini`;
+    if (wasKing) {
+      el.appendChild(buildCrownSvg());
+    }
+    container.appendChild(el);
+  }
+
+  /**
    * Отрисовывает доску 8x8 в DOM на основе текущего массива board.
    * Подсвечивает выбранную фигуру, доступные простые ходы (жёлтая точка)
    * и клетки взятия (красная точка), рисует корону и двойной контур у дамок.
@@ -937,17 +1013,33 @@
           const piece = board[row][col];
           if (piece !== EMPTY) {
             const hit = isHit(row, col);
+            const key = cellKey(row, col);
+            const alreadyAnimated = hitCellsAnimated.has(key);
             const canSelect = !hit && !gameOver && !botThinking && colorOf(piece) === currentPlayer &&
               !(gameMode === 'pvc' && currentPlayer === 'black') &&
               (!activeChainPiece || (activeChainPiece.row === row && activeChainPiece.col === col)) &&
               (mustCapturePieces.length === 0 || mustCapturePieces.some(p => p.row === row && p.col === col));
 
             const pieceEl = document.createElement('div');
-            pieceEl.className = pieceCssClass(piece) + (canSelect ? '' : ' no-drag') + (hit ? ' hit' : '');
+            // Класс "hit" здесь НЕ добавляем сразу: если фигуру срубили только
+            // что (ещё не анимировали), сперва отрисовываем её в обычном виде,
+            // чтобы браузеру было от чего анимировать переход. Если она уже
+            // была анимирована на прошлой отрисовке (например, в середине
+            // серии взятий) — сразу рисуем в конечном (скрытом) состоянии.
+            pieceEl.className = pieceCssClass(piece) + (canSelect ? '' : ' no-drag') +
+              (hit && alreadyAnimated ? ' hit' : '');
             if (isKing(piece)) {
               pieceEl.appendChild(buildCrownSvg());
             }
             cell.appendChild(pieceEl);
+
+            if (hit && !alreadyAnimated) {
+              // Форсируем reflow, чтобы браузер зафиксировал "обычный" вид
+              // ДО применения класса .hit — иначе CSS-переход не проиграется.
+              void pieceEl.offsetWidth;
+              pieceEl.classList.add('hit');
+              hitCellsAnimated.add(key);
+            }
           }
 
           cell.addEventListener('click', () => handleCellClick(row, col));
@@ -986,6 +1078,42 @@
     blackCountEl.textContent = `Чёрные: ${countPieces(board, 'black')}`;
     turnIndicator.classList.toggle('black', currentPlayer === 'black');
     updateStatusText();
+    updatePlayerPanels();
+  }
+
+  /** Обновляет имя/статус чёрного игрока и подсветку активной панели дашборда. */
+  function updatePlayerPanels() {
+    if (blackPlayerNameEl) {
+      blackPlayerNameEl.textContent = gameMode === 'pvc' ? 'Чёрные (Бот)' : 'Чёрные';
+    }
+
+    if (gameOver) {
+      if (whiteStatusEl) whiteStatusEl.textContent = 'Игра окончена';
+      if (blackStatusEl) blackStatusEl.textContent = 'Игра окончена';
+      if (whitePlayerPanelEl) whitePlayerPanelEl.classList.remove('active');
+      if (blackPlayerPanelEl) blackPlayerPanelEl.classList.remove('active');
+      return;
+    }
+
+    const isWhiteTurn = currentPlayer === 'white';
+
+    if (whiteStatusEl) {
+      whiteStatusEl.textContent = isWhiteTurn
+        ? (mustCapturePieces.length > 0 ? 'Обязан бить' : 'Ходит…')
+        : 'Ожидает';
+    }
+    if (blackStatusEl) {
+      if (isWhiteTurn) {
+        blackStatusEl.textContent = 'Ожидает';
+      } else if (gameMode === 'pvc') {
+        blackStatusEl.textContent = botThinking ? 'Думает…' : 'Ходит…';
+      } else {
+        blackStatusEl.textContent = mustCapturePieces.length > 0 ? 'Обязан бить' : 'Ходит…';
+      }
+    }
+
+    if (whitePlayerPanelEl) whitePlayerPanelEl.classList.toggle('active', isWhiteTurn);
+    if (blackPlayerPanelEl) blackPlayerPanelEl.classList.toggle('active', !isWhiteTurn);
   }
 
   /**
@@ -1046,9 +1174,14 @@
     lastMove = null;
     moveMadeThisGame = false;
     hitCells.clear();
+    hitCellsAnimated.clear();
     moveHistory = [];
     currentMoveSquares = [];
     pendingAnimation = null;
+    graveyard = { white: [], black: [] };
+    if (graveyardWhiteEl) graveyardWhiteEl.innerHTML = '';
+    if (graveyardBlackEl) graveyardBlackEl.innerHTML = '';
+    closeVictoryModal();
     statusText.classList.remove('shake');
     clearSelection();
     computeMustCapture();
@@ -1093,6 +1226,147 @@
     }
   }
 
+  // ---------- Victory Modal (вместо alert()) + конфетти ----------
+
+  let confettiAnimationId = null;
+
+  /**
+   * Открывает праздничное модальное окно по итогам партии: заголовок,
+   * пояснение, статистика (число ходов, срублено каждой стороной) и запуск
+   * конфетти на <canvas>. Используется вместо стандартного alert().
+   */
+  function openVictoryModal(result) {
+    if (!victoryModalEl) return;
+
+    if (modalTitleEl) {
+      modalTitleEl.textContent = result.type === 'draw'
+        ? 'Ничья!'
+        : `Победа: ${result.winner === 'white' ? 'Белые' : 'Чёрные'}!`;
+    }
+
+    if (modalSubtitleEl) {
+      if (result.type === 'draw') {
+        modalSubtitleEl.textContent = `${DRAW_PLIES_LIMIT} ходов подряд без взятия — на доске остались только дамки.`;
+      } else if (result.reason === 'no-pieces') {
+        modalSubtitleEl.textContent = 'У соперника не осталось фигур на доске.';
+      } else {
+        modalSubtitleEl.textContent = 'У соперника не осталось доступных ходов.';
+      }
+    }
+
+    if (modalMoveCountEl) modalMoveCountEl.textContent = String(moveHistory.length);
+    if (modalWhiteCapturesEl) modalWhiteCapturesEl.textContent = String(graveyard.white.length);
+    if (modalBlackCapturesEl) modalBlackCapturesEl.textContent = String(graveyard.black.length);
+
+    victoryModalEl.classList.add('open');
+    victoryModalEl.setAttribute('aria-hidden', 'false');
+    startConfetti();
+  }
+
+  /** Закрывает модальное окно и останавливает конфетти (если оно ещё открыто). */
+  function closeVictoryModal() {
+    if (!victoryModalEl) return;
+    victoryModalEl.classList.remove('open');
+    victoryModalEl.setAttribute('aria-hidden', 'true');
+    stopConfetti();
+  }
+
+  /**
+   * Простая праздничная анимация конфетти на <canvas> через requestAnimationFrame.
+   * Обёрнута в try/catch и проверки наличия canvas/2D-контекста, поскольку
+   * это чисто декоративный эффект — его отсутствие (например, в headless-
+   * окружениях без поддержки canvas) не должно ломать остальную игру.
+   */
+  function startConfetti() {
+    try {
+      if (!confettiCanvas || typeof confettiCanvas.getContext !== 'function') return;
+      const ctx = confettiCanvas.getContext('2d');
+      if (!ctx) return;
+
+      stopConfetti();
+
+      const width = window.innerWidth || 800;
+      const height = window.innerHeight || 600;
+      confettiCanvas.width = width;
+      confettiCanvas.height = height;
+
+      const colors = ['#e8c471', '#ff2e88', '#33e8ff', '#4ade80', '#f472b6', '#fbbf24'];
+      const particles = [];
+      const PARTICLE_COUNT = 130;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particles.push({
+          x: Math.random() * width,
+          y: -20 - Math.random() * height * 0.5,
+          w: 5 + Math.random() * 6,
+          h: 8 + Math.random() * 10,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          speedY: 2 + Math.random() * 3,
+          speedX: (Math.random() - 0.5) * 2.4,
+          rotation: Math.random() * 360,
+          rotationSpeed: (Math.random() - 0.5) * 12
+        });
+      }
+
+      const raf = window.requestAnimationFrame
+        ? window.requestAnimationFrame.bind(window)
+        : (cb) => setTimeout(() => cb(Date.now()), 16);
+      const caf = window.cancelAnimationFrame
+        ? window.cancelAnimationFrame.bind(window)
+        : (id) => clearTimeout(id);
+
+      const startTime = Date.now();
+      const DURATION_MS = 3200;
+
+      const frame = () => {
+        const elapsed = Date.now() - startTime;
+        ctx.clearRect(0, 0, width, height);
+
+        particles.forEach(p => {
+          p.x += p.speedX;
+          p.y += p.speedY;
+          p.rotation += p.rotationSpeed;
+
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rotation * Math.PI) / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+
+        if (elapsed < DURATION_MS) {
+          confettiAnimationId = raf(frame);
+        } else {
+          ctx.clearRect(0, 0, width, height);
+          confettiAnimationId = null;
+        }
+      };
+
+      confettiAnimationId = raf(frame);
+      // Сохраняем ссылку на caf, чтобы stopConfetti() могла её использовать
+      startConfetti.__caf = caf;
+    } catch (e) {
+      // Конфетти — чисто декоративный эффект; ошибка здесь не должна ронять игру.
+    }
+  }
+
+  /** Останавливает анимацию конфетти и очищает канвас. */
+  function stopConfetti() {
+    try {
+      if (confettiAnimationId !== null) {
+        const caf = startConfetti.__caf || (window.cancelAnimationFrame && window.cancelAnimationFrame.bind(window));
+        if (caf) caf(confettiAnimationId);
+        confettiAnimationId = null;
+      }
+      if (confettiCanvas && typeof confettiCanvas.getContext === 'function') {
+        const ctx = confettiCanvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      }
+    } catch (e) {
+      // не критично
+    }
+  }
+
   restartBtn.addEventListener('click', handleRestartClick);
   modePvpRadio.addEventListener('change', () => {
     if (modePvpRadio.checked) handleModeChange('pvp');
@@ -1100,6 +1374,16 @@
   modePvcRadio.addEventListener('change', () => {
     if (modePvcRadio.checked) handleModeChange('pvc');
   });
+
+  if (modalRematchBtn) {
+    modalRematchBtn.addEventListener('click', () => {
+      closeVictoryModal();
+      restart();
+    });
+  }
+  if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', closeVictoryModal);
+  }
 
   // Синхронизируем выпадающий список с темой, уже применённой инлайн-скриптом
   // в <head> (из localStorage или 'wood' по умолчанию), и подписываемся на смену.
