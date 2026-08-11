@@ -264,7 +264,7 @@ html[data-theme="cyberpunk"] .title {
 
 .game {
   width: 100%;
-  max-width: 860px;
+  max-width: 1180px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -323,6 +323,150 @@ html[data-theme="cyberpunk"] .title {
   background: var(--ivory-faint);
   border: 1px solid var(--panel-border);
   color: var(--ivory);
+}
+
+/* =====================================================================
+   Dashboard — двухколоночный (точнее, трёхколоночный: панель / доска / панель)
+   макет: доска в центре, панели игроков по бокам с "кладбищем" срубленных фигур.
+   ===================================================================== */
+.dashboard {
+  width: 100%;
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.player-panel {
+  flex: 0 1 190px;
+  max-width: 210px;
+  min-width: 160px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.player-panel.active {
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 0 1px var(--accent-bright), 0 0 18px rgba(0, 0, 0, 0.25);
+}
+
+.player-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.player-swatch {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 2px 3px rgba(255, 255, 255, 0.4);
+}
+
+.player-swatch-white {
+  background: radial-gradient(circle at 34% 26%, var(--white-piece-a), var(--white-piece-shadow));
+}
+
+.player-swatch-black {
+  background: radial-gradient(circle at 34% 26%, var(--black-piece-a), var(--black-piece-shadow));
+}
+
+.player-name {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-size: 0.95rem;
+  color: var(--ivory);
+}
+
+.player-status {
+  margin: 0.1rem 0 0;
+  font-size: 0.76rem;
+  color: var(--ivory-dim);
+  letter-spacing: 0.02em;
+}
+
+.player-panel.active .player-status {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
+/* "Кладбище" — панель миниатюрных срубленных фигур соперника */
+.graveyard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 2.4rem;
+  padding: 0.4rem;
+  border-radius: 8px;
+  background: var(--ivory-faint);
+}
+
+@keyframes graveyardPop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.graveyard-piece {
+  animation: graveyardPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.piece.mini {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  cursor: default;
+}
+
+.piece.mini:hover {
+  transform: none;
+}
+
+.piece.mini .king-crown {
+  width: 62%;
+  height: 62%;
+}
+
+@media (max-width: 980px) {
+  .dashboard {
+    justify-content: center;
+  }
+  .player-panel {
+    flex: 1 1 45%;
+    max-width: 320px;
+    flex-direction: row;
+    align-items: center;
+  }
+  .player-panel-head {
+    flex: 0 0 auto;
+  }
+  .graveyard {
+    flex: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  .player-panel {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
 }
 
 /* =====================================================================
@@ -674,14 +818,17 @@ html[data-theme="cyberpunk"] .board-frame {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)) brightness(1.12);
 }
 
-/* "Турецкий удар": фигура срублена в рамках текущего хода, но ещё
-   физически на доске — приглушаем и помечаем контуром до момента
-   её итогового удаления по завершении хода. */
+/* "Турецкий удар": фигура срублена в рамках текущего хода. Логически она
+   ещё физически на доске (блокирует повторное взятие до конца хода), но
+   ВИЗУАЛЬНО плавно уменьшается и растворяется сразу в момент срубания
+   (scale(0) + opacity 0), одновременно с появлением её копии в "кладбище".
+   Анимация проигрывается JS-ом через приём "force reflow" (см. script.js),
+   поэтому здесь достаточно просто описать целевое (конечное) состояние. */
 .piece.hit {
-  opacity: 0.4;
-  filter: grayscale(65%);
-  box-shadow: inset 0 0 0 3px rgba(214, 62, 62, 0.75), 0 2px 4px rgba(0, 0, 0, 0.4);
-  transition: opacity 0.2s ease;
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.55, 0, 0.85, 0.35), opacity 0.3s ease;
+  pointer-events: none;
 }
 
 /* ---------- Mode switch ---------- */
@@ -805,4 +952,162 @@ html[data-theme="cyberpunk"] .board-frame {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
+}
+
+/* =====================================================================
+   Victory Modal — праздничное модальное окно вместо alert(), с размытием
+   фона и конфетти на <canvas>.
+   ===================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 4, 8, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.confetti-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+@keyframes modalPopIn {
+  0% {
+    transform: scale(0.85) translateY(12px);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(90vw, 380px);
+  background: linear-gradient(180deg, var(--plate-bg-1) 0%, var(--plate-bg-2) 100%);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: modalPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-title {
+  margin: 0 0 0.4rem;
+  font-family: var(--heading-font);
+  font-size: 1.7rem;
+  color: var(--accent-bright);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="cyberpunk"] .modal-title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 10px var(--accent-bright), 0 0 20px rgba(51, 232, 255, 0.5);
+}
+
+.modal-subtitle {
+  margin: 0 0 1.25rem;
+  font-size: 0.88rem;
+  color: var(--ivory-dim);
+}
+
+.modal-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.1rem;
+  margin-bottom: 1.5rem;
+  padding: 0.9rem 0.5rem;
+  border-radius: 10px;
+  background: var(--ivory-faint);
+}
+
+.modal-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.modal-stat-value {
+  font-family: var(--heading-font);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ivory);
+}
+
+.modal-stat-label {
+  font-size: 0.66rem;
+  letter-spacing: 0.03em;
+  color: var(--ivory-dim);
+  text-align: center;
+  max-width: 6rem;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.modal-btn {
+  font-family: var(--body-font);
+  font-weight: 600;
+  font-size: 0.92rem;
+  border-radius: 999px;
+  padding: 0.65rem 1.2rem;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+
+.modal-btn:active {
+  transform: translateY(2px);
+}
+
+.modal-btn-primary {
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 8px 16px rgba(0, 0, 0, 0.35);
+}
+
+.modal-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.modal-btn-secondary {
+  color: var(--ivory);
+  background: var(--ivory-faint);
+  border: 1px solid var(--panel-border);
+}
+
+.modal-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-card {
+    animation: none;
+  }
+  .modal-overlay {
+    transition: none;
+  }
 }
