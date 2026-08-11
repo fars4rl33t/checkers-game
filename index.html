@@ -39,7 +39,22 @@
       </section>
 
       <section class="board-wrap">
-        <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
+        <div class="board-and-history">
+          <div class="board-with-coords">
+            <div class="file-labels" aria-hidden="true">
+              <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+            </div>
+            <div class="rank-labels" aria-hidden="true">
+              <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+            </div>
+            <div class="board" id="board" role="grid" aria-label="Доска для шашек 8 на 8"></div>
+          </div>
+
+          <aside class="history-panel" aria-label="История ходов">
+            <h2 class="history-title">История ходов</h2>
+            <ol class="history-list" id="historyList"></ol>
+          </aside>
+        </div>
       </section>
 
       <section class="controls">
