@@ -19,6 +19,7 @@
   const restartBtn = document.getElementById('restartBtn');
   const modePvpRadio = document.getElementById('modePvp');
   const modePvcRadio = document.getElementById('modePvc');
+  const themeSelect = document.getElementById('themeSelect');
   const historyListEl = document.getElementById('historyList');
 
   /**
@@ -840,6 +841,54 @@
     return `piece ${color}${isKing(piece) ? ' king' : ''}`;
   }
 
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /**
+   * Строит настоящую векторную SVG-иконку короны для дамки (вместо текста
+   * или эмодзи). Заливка ссылается на общий градиент #crownGradient,
+   * объявленный один раз в index.html и подхватывающий цвета текущей
+   * темы через CSS-переменные — при смене темы перерисовывать иконку не нужно.
+   */
+  function buildCrownSvg() {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('class', 'king-crown');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', 'M3 18.4h18l-1.3-9.1-4.4 4.1-3.3-6.6-3.3 6.6-4.4-4.1L3 18.4z');
+    path.setAttribute('fill', 'url(#crownGradient)');
+    path.setAttribute('stroke', 'rgba(0,0,0,0.35)');
+    path.setAttribute('stroke-width', '0.6');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+
+    const base = document.createElementNS(SVG_NS, 'rect');
+    base.setAttribute('x', '3');
+    base.setAttribute('y', '18.1');
+    base.setAttribute('width', '18');
+    base.setAttribute('height', '2');
+    base.setAttribute('rx', '0.6');
+    base.setAttribute('fill', 'url(#crownGradient)');
+    base.setAttribute('stroke', 'rgba(0,0,0,0.35)');
+    base.setAttribute('stroke-width', '0.4');
+    svg.appendChild(base);
+
+    [[4.6, 8.5, 1.15], [12, 5.3, 1.3], [19.4, 8.5, 1.15]].forEach(([cx, cy, r]) => {
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('cx', String(cx));
+      circle.setAttribute('cy', String(cy));
+      circle.setAttribute('r', String(r));
+      circle.setAttribute('fill', 'url(#crownGradient)');
+      circle.setAttribute('stroke', 'rgba(0,0,0,0.3)');
+      circle.setAttribute('stroke-width', '0.4');
+      svg.appendChild(circle);
+    });
+
+    return svg;
+  }
+
   /**
    * Отрисовывает доску 8x8 в DOM на основе текущего массива board.
    * Подсвечивает выбранную фигуру, доступные простые ходы (жёлтая точка)
@@ -895,6 +944,9 @@
 
             const pieceEl = document.createElement('div');
             pieceEl.className = pieceCssClass(piece) + (canSelect ? '' : ' no-drag') + (hit ? ' hit' : '');
+            if (isKing(piece)) {
+              pieceEl.appendChild(buildCrownSvg());
+            }
             cell.appendChild(pieceEl);
           }
 
@@ -1027,12 +1079,33 @@
     restart();
   }
 
+  /**
+   * Применяет тему оформления: обновляет data-атрибут на <html>
+   * (CSS-переменные подхватываются автоматически) и сохраняет выбор
+   * в localStorage, чтобы тема не сбрасывалась при перезагрузке страницы.
+   */
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem('checkersTheme', theme);
+    } catch (e) {
+      // localStorage недоступен (приватный режим и т.п.) — тема просто не сохранится
+    }
+  }
+
   restartBtn.addEventListener('click', handleRestartClick);
   modePvpRadio.addEventListener('change', () => {
     if (modePvpRadio.checked) handleModeChange('pvp');
   });
   modePvcRadio.addEventListener('change', () => {
     if (modePvcRadio.checked) handleModeChange('pvc');
+  });
+
+  // Синхронизируем выпадающий список с темой, уже применённой инлайн-скриптом
+  // в <head> (из localStorage или 'wood' по умолчанию), и подписываемся на смену.
+  themeSelect.value = document.documentElement.dataset.theme || 'wood';
+  themeSelect.addEventListener('change', () => {
+    applyTheme(themeSelect.value);
   });
 
   restart();
