@@ -1,0 +1,14 @@
+{
+  "name": "checkers-game",
+  "version": "1.0.0",
+  "description": "Веб-версия классических русских шашек на чистом HTML, CSS и JavaScript.",
+  "private": true,
+  "main": "index.html",
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  },
+  "license": "MIT"
+}
