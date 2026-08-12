@@ -19,6 +19,8 @@
   const restartBtn = document.getElementById('restartBtn');
   const modePvpRadio = document.getElementById('modePvp');
   const modePvcRadio = document.getElementById('modePvc');
+  const difficultyPanel = document.getElementById('difficultyPanel');
+  const difficultySelect = document.getElementById('difficultySelect');
   const themeSelect = document.getElementById('themeSelect');
   const historyListEl = document.getElementById('historyList');
   const whiteStatusEl = document.getElementById('whiteStatus');
@@ -95,6 +97,9 @@
 
   /** Режим игры: 'pvp' — 2 игрока за экраном, 'pvc' — игрок (белые) против бота (чёрные). */
   let gameMode = 'pvc';
+
+  /** Уровень сложности бота: 'easy' | 'medium' | 'hard'. Актуален только в режиме 'pvc'. */
+  let botDifficulty = 'medium';
 
   /** true, пока бот "думает" или совершает свой ход — блокирует клики пользователя. */
   let botThinking = false;
@@ -520,8 +525,8 @@
   }
 
   /**
-   * Приоритет 2/3 бота: выбирает лучший простой (некапительный) ход среди
-   * всех доступных чёрных фигур.
+   * Приоритет 2/3 "Среднего" бота: выбирает лучший простой (некапительный)
+   * ход среди всех доступных чёрных фигур.
    * - Исключает ходы, которые сразу подставляют фигуру под взятие белыми (Приоритет 2).
    * - Среди безопасных ходов предпочитает те, что продвигают простую шашку
    *   ближе к дамке (row 7) или ставят дамку на более активную (центральную) клетку.
@@ -561,17 +566,13 @@
   }
 
   /**
-   * Выполняет весь ход бота (чёрных): обязательное взятие с максимальной
-   * серией срубаний (Приоритет 1), либо безопасный продвигающий простой
-   * ход (Приоритет 2), либо случайный валидный ход (Приоритет 3).
-   * Серия взятий доводится до конца автоматически, без участия пользователя.
+   * УРОВЕНЬ "СРЕДНИЙ": обязательное взятие с максимальной серией срубаний
+   * (Приоритет 1), либо безопасный продвигающий простой ход (Приоритет 2),
+   * либо случайный валидный ход (Приоритет 3). Серия взятий доводится до
+   * конца автоматически, без участия пользователя. Это исходная ("жадная")
+   * логика бота из предыдущих шагов.
    */
-  function performBotTurn() {
-    if (gameOver) {
-      botThinking = false;
-      return;
-    }
-
+  function performMediumBotMove() {
     if (mustCapturePieces.length > 0) {
       const choice = chooseBotCaptureStart();
       if (choice.piece && choice.target) {
@@ -593,6 +594,258 @@
         const target = legalTargets.find(t => t.row === chosen.to.row && t.col === chosen.to.col);
         if (target) applyMove(target);
       }
+    }
+  }
+
+  /**
+   * УРОВЕНЬ "ЛЁГКИЙ": обязательное взятие выполняется (правила игры не
+   * обходятся — это не опция бота), но БЕЗ поиска максимальной серии —
+   * фигура и каждый следующий прыжок серии выбираются случайно среди
+   * доступных вариантов. Если срубаний нет — полностью случайный
+   * валидный простой ход, без оценки безопасности или стратегии.
+   */
+  function performEasyBotMove() {
+    if (mustCapturePieces.length > 0) {
+      const piece = mustCapturePieces[Math.floor(Math.random() * mustCapturePieces.length)];
+      selectPiece(piece.row, piece.col);
+
+      let target = legalTargets[Math.floor(Math.random() * legalTargets.length)];
+      if (target) applyMove(target);
+
+      while (activeChainPiece) {
+        const next = legalTargets[Math.floor(Math.random() * legalTargets.length)];
+        if (!next) break; // защита от несогласованного состояния — не должно происходить
+        applyMove(next);
+      }
+    } else {
+      const allMoves = [];
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (colorOf(board[r][c]) === 'black') {
+            for (const m of getSimpleMoves(board, r, c)) {
+              allMoves.push({ from: { row: r, col: c }, to: m });
+            }
+          }
+        }
+      }
+      if (allMoves.length > 0) {
+        const chosen = allMoves[Math.floor(Math.random() * allMoves.length)];
+        selectPiece(chosen.from.row, chosen.from.col);
+        const target = legalTargets.find(t => t.row === chosen.to.row && t.col === chosen.to.col);
+        if (target) applyMove(target);
+      }
+    }
+  }
+
+  // ---------- УРОВЕНЬ "СЛОЖНЫЙ": Minimax с альфа-бета отсечением ----------
+
+  /** Глубина просчёта минимакса в "ходах" (сменах игрока), не в прыжках серии. */
+  const HARD_MINIMAX_DEPTH = 4;
+
+  /**
+   * Жёсткий предохранитель от "зависания" вкладки: сколько бы ни было
+   * реально исследовано узлов дерева, поиск гарантированно остановится
+   * (вернёт эвристическую оценку вместо дальнейшего рекурсивного спуска)
+   * после превышения этого бюджета, независимо от глубины и ветвления.
+   */
+  const HARD_NODE_BUDGET = 15000;
+  let hardNodesVisited = 0;
+
+  /**
+   * Рекурсивно собирает ВСЕ возможные полные серии взятия для фигуры,
+   * стартующей в (startRow, startCol) на доске b (в отличие от бота
+   * "Средний", который ищет только максимально длинную серию — здесь
+   * нужны ВСЕ варианты, чтобы минимакс мог сравнить их эвристически,
+   * а не только по длине).
+   */
+  function collectCaptureSequences(b, row, col, path, results) {
+    const caps = getCaptureMoves(b, row, col);
+    if (caps.length === 0) {
+      results.push({ path, boardAfter: b });
+      return;
+    }
+    for (const cap of caps) {
+      const clone = cloneBoard(b);
+      const piece = clone[row][col];
+      clone[row][col] = EMPTY;
+      clone[cap.captured.row][cap.captured.col] = EMPTY;
+      clone[cap.row][cap.col] = piece;
+      promoteIfNeeded(clone, cap.row, cap.col);
+      collectCaptureSequences(
+        clone, cap.row, cap.col,
+        path.concat([{ row: cap.row, col: cap.col, captured: cap.captured }]),
+        results
+      );
+    }
+  }
+
+  /**
+   * Генерирует ВСЕ полные легальные ходы (целиком — включая полные серии
+   * взятия, если они обязательны) для игрока color на доске b. Каждый
+   * результат содержит стартовую клетку, путь прыжков (для последующего
+   * реального применения через selectPiece/applyMove) и итоговую доску
+   * (для рекурсивного поиска минимакса).
+   */
+  function generateAllTurnMoves(b, color) {
+    const moves = [];
+    const withCaptures = getPiecesWithCaptures(b, color);
+
+    if (withCaptures.length > 0) {
+      for (const piece of withCaptures) {
+        const results = [];
+        collectCaptureSequences(b, piece.row, piece.col, [], results);
+        for (const r of results) {
+          moves.push({ startRow: piece.row, startCol: piece.col, path: r.path, boardAfter: r.boardAfter });
+        }
+      }
+    } else {
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (colorOf(b[r][c]) !== color) continue;
+          for (const m of getSimpleMoves(b, r, c)) {
+            const clone = cloneBoard(b);
+            const piece = clone[r][c];
+            clone[r][c] = EMPTY;
+            clone[m.row][m.col] = piece;
+            promoteIfNeeded(clone, m.row, m.col);
+            moves.push({ startRow: r, startCol: c, path: [{ row: m.row, col: m.col, captured: null }], boardAfter: clone });
+          }
+        }
+      }
+    }
+    return moves;
+  }
+
+  /**
+   * Эвристическая оценка позиции с точки зрения ЧЁРНЫХ (бот): положительное
+   * значение — позиция выгодна чёрным, отрицательное — выгодна белым.
+   * Учитывает: баланс простых шашек (±1) и дамок (±3.5), контроль
+   * центральных клеток, продвижение простых шашек к дамке, и защиту
+   * собственного заднего ряда (клетки, откуда соперник мог бы провести
+   * дамку) — классический комплект эвристик для шашек.
+   */
+  function evaluateBoard(b) {
+    let score = 0;
+
+    for (let row = 0; row < SIZE; row++) {
+      for (let col = 0; col < SIZE; col++) {
+        const piece = b[row][col];
+        if (piece === EMPTY) continue;
+
+        const color = colorOf(piece);
+        const sign = color === 'black' ? 1 : -1;
+
+        // Баланс материала: простая шашка ±1, дамка ±3.5
+        score += sign * (isKing(piece) ? 3.5 : 1);
+
+        // Контроль центра доски — небольшой бонус, чем ближе к центру
+        const centrality = 3.5 - (Math.abs(row - 3.5) + Math.abs(col - 3.5));
+        score += sign * centrality * 0.04;
+
+        // Продвижение простых шашек к превращению в дамку
+        if (!isKing(piece)) {
+          const advancement = color === 'black' ? row : (SIZE - 1 - row);
+          score += sign * advancement * 0.03;
+        }
+
+        // Защита заднего ряда: свои фигуры на собственном исходном ряду
+        // мешают сопернику провести туда дамку — небольшой бонус за каждую.
+        if (color === 'black' && row === 0) score += 0.5;
+        if (color === 'white' && row === SIZE - 1) score -= 0.5;
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Минимакс с альфа-бета отсечением. Ход считается ОДНИМ узлом дерева
+   * целиком (вся серия взятия — это один ход одного игрока), что
+   * соответствует реальной смене хода в игре. color — чей ход в данном узле.
+   */
+  function minimax(b, depth, alpha, beta, color) {
+    hardNodesVisited++;
+    if (depth === 0 || hardNodesVisited > HARD_NODE_BUDGET) {
+      return evaluateBoard(b);
+    }
+
+    const moves = generateAllTurnMoves(b, color);
+    if (moves.length === 0) {
+      // У игрока color нет ходов — это поражение color в реальной игре;
+      // отражаем это как экстремальную (но не бесконечную) оценку.
+      return color === 'black' ? -1000 + depth : 1000 - depth;
+    }
+
+    if (color === 'black') {
+      let value = -Infinity;
+      for (const m of moves) {
+        value = Math.max(value, minimax(m.boardAfter, depth - 1, alpha, beta, 'white'));
+        alpha = Math.max(alpha, value);
+        if (alpha >= beta || hardNodesVisited > HARD_NODE_BUDGET) break;
+      }
+      return value;
+    }
+
+    let value = Infinity;
+    for (const m of moves) {
+      value = Math.min(value, minimax(m.boardAfter, depth - 1, alpha, beta, 'black'));
+      beta = Math.min(beta, value);
+      if (alpha >= beta || hardNodesVisited > HARD_NODE_BUDGET) break;
+    }
+    return value;
+  }
+
+  /**
+   * УРОВЕНЬ "СЛОЖНЫЙ": полноценный минимакс с альфа-бета отсечением на
+   * глубину HARD_MINIMAX_DEPTH ходов вперёд (ограничено бюджетом узлов
+   * HARD_NODE_BUDGET, чтобы гарантированно не подвесить вкладку). Среди
+   * ходов с одинаковой лучшей оценкой выбирается случайный — для
+   * разнообразия партий при одинаковой силе игры.
+   */
+  function performHardBotMove() {
+    hardNodesVisited = 0;
+    const moves = generateAllTurnMoves(board, 'black');
+    if (moves.length === 0) return;
+
+    let bestScore = -Infinity;
+    let bestMoves = [];
+    for (const m of moves) {
+      const score = minimax(m.boardAfter, HARD_MINIMAX_DEPTH - 1, -Infinity, Infinity, 'white');
+      if (score > bestScore + 1e-9) {
+        bestScore = score;
+        bestMoves = [m];
+      } else if (Math.abs(score - bestScore) < 1e-9) {
+        bestMoves.push(m);
+      }
+    }
+
+    const chosen = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    selectPiece(chosen.startRow, chosen.startCol);
+    for (const step of chosen.path) {
+      const target = legalTargets.find(t => t.row === step.row && t.col === step.col);
+      if (target) applyMove(target);
+    }
+  }
+
+  /**
+   * Выполняет весь ход бота (чёрных) согласно выбранному уровню сложности
+   * (botDifficulty): "Лёгкий" — случайные ходы, "Средний" — жадная
+   * эвристика (макс. серия взятий + безопасное продвижение), "Сложный" —
+   * минимакс с альфа-бета отсечением. Серия взятий в любом случае
+   * доводится до конца автоматически, без участия пользователя.
+   */
+  function performBotTurn() {
+    if (gameOver) {
+      botThinking = false;
+      return;
+    }
+
+    if (botDifficulty === 'easy') {
+      performEasyBotMove();
+    } else if (botDifficulty === 'hard') {
+      performHardBotMove();
+    } else {
+      performMediumBotMove();
     }
 
     botThinking = false;
@@ -1185,6 +1438,7 @@
     statusText.classList.remove('shake');
     clearSelection();
     computeMustCapture();
+    updateDifficultyPanelVisibility();
     renderMoveHistory();
     renderBoard();
     // Партия всегда начинается ходом белых, поэтому бот здесь не запускается сразу.
@@ -1209,6 +1463,20 @@
   function handleModeChange(newMode) {
     if (newMode === gameMode) return;
     gameMode = newMode;
+    restart();
+  }
+
+  /** Показывает панель сложности бота только в режиме "Игрок против Компьютера". */
+  function updateDifficultyPanelVisibility() {
+    if (difficultyPanel) {
+      difficultyPanel.classList.toggle('hidden', gameMode !== 'pvc');
+    }
+  }
+
+  /** Переключение уровня сложности бота — как и смена режима, сбрасывает партию. */
+  function handleDifficultyChange(newDifficulty) {
+    if (newDifficulty === botDifficulty) return;
+    botDifficulty = newDifficulty;
     restart();
   }
 
@@ -1374,6 +1642,13 @@
   modePvcRadio.addEventListener('change', () => {
     if (modePvcRadio.checked) handleModeChange('pvc');
   });
+
+  if (difficultySelect) {
+    difficultySelect.value = botDifficulty;
+    difficultySelect.addEventListener('change', () => {
+      handleDifficultyChange(difficultySelect.value);
+    });
+  }
 
   if (modalRematchBtn) {
     modalRematchBtn.addEventListener('click', () => {
