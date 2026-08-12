@@ -240,6 +240,11 @@ html[data-theme="cyberpunk"] .title {
   padding: 0.35rem 0.9rem;
 }
 
+/* Панель сложности бота видна только в режиме "Игрок против Компьютера" */
+.difficulty-panel.hidden {
+  display: none;
+}
+
 .theme-label {
   font-size: 0.78rem;
   font-weight: 600;
