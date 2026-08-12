@@ -288,6 +288,8 @@ html[data-theme="cyberpunk"] .title {
 .status-plate {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.65rem;
   background: linear-gradient(180deg, var(--plate-bg-1) 0%, var(--plate-bg-2) 100%);
   border: 1px solid var(--panel-border);
@@ -313,10 +315,14 @@ html[data-theme="cyberpunk"] .title {
   font-weight: 600;
   font-size: 1rem;
   letter-spacing: 0.02em;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .score-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.6rem;
 }
 
@@ -366,6 +372,11 @@ html[data-theme="cyberpunk"] .title {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  min-width: 0;
+}
+
+.player-panel-head > div {
+  min-width: 0;
 }
 
 .player-swatch {
@@ -389,6 +400,7 @@ html[data-theme="cyberpunk"] .title {
   font-family: var(--heading-font);
   font-size: 0.95rem;
   color: var(--ivory);
+  overflow-wrap: break-word;
 }
 
 .player-status {
@@ -396,6 +408,7 @@ html[data-theme="cyberpunk"] .title {
   font-size: 0.76rem;
   color: var(--ivory-dim);
   letter-spacing: 0.02em;
+  overflow-wrap: break-word;
 }
 
 .player-panel.active .player-status {
@@ -496,11 +509,21 @@ html[data-theme="cyberpunk"] .title {
 
 .board-frame {
   display: grid;
-  grid-template-columns: 1.35rem 1fr 1.35rem;
-  grid-template-rows: 1.25rem 1fr 1.25rem;
-  width: min(100%, 560px);
-  flex: 0 1 560px;
-  padding: 12px;
+  /* Единая сетка 10x10: крайние треки (1.25rem) — буквенно-цифровая
+     разметка, средние 8 треков — игровые колонки/ряды. Поскольку оба
+     измерения (колонки и ряды) используют АБСОЛЮТНО ИДЕНТИЧНЫЙ паттерн
+     (1.25rem + 8×1fr + 1.25rem), а сам контейнер держит aspect-ratio:1/1,
+     квадратность и совпадение клеток с разметкой гарантированы математически
+     на любом разрешении — а не "сходимостью" двух независимых вложенных
+     гридов, как было раньше (источник искажений на мобильных экранах).
+  */
+  grid-template-columns: 1.25rem repeat(8, 1fr) 1.25rem;
+  grid-template-rows: 1.25rem repeat(8, 1fr) 1.25rem;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: min(90vw, 500px);
+  margin: 0 auto;
+  padding: 10px;
   border-radius: 12px;
   background: linear-gradient(155deg, var(--frame-highlight) 0%, var(--frame-color) 45%, var(--frame-shadow) 100%);
   box-shadow:
@@ -519,7 +542,7 @@ html[data-theme="cyberpunk"] .board-frame {
 }
 
 .files-row {
-  grid-column: 2;
+  grid-column: 2 / 10;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
 }
@@ -529,11 +552,11 @@ html[data-theme="cyberpunk"] .board-frame {
 }
 
 .files-bottom {
-  grid-row: 3;
+  grid-row: 10;
 }
 
 .ranks-col {
-  grid-row: 2;
+  grid-row: 2 / 10;
   display: grid;
   grid-template-rows: repeat(8, 1fr);
 }
@@ -543,7 +566,7 @@ html[data-theme="cyberpunk"] .board-frame {
 }
 
 .ranks-right {
-  grid-column: 3;
+  grid-column: 10;
 }
 
 .files-row span,
@@ -559,9 +582,10 @@ html[data-theme="cyberpunk"] .board-frame {
 }
 
 .board {
-  grid-column: 2;
-  grid-row: 2;
+  grid-column: 2 / 10;
+  grid-row: 2 / 10;
   width: 100%;
+  height: 100%;
   aspect-ratio: 1 / 1;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
@@ -665,6 +689,9 @@ html[data-theme="cyberpunk"] .board-frame {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Убирает задержку ~300мс перед обработкой тапа и блокирует случайный
+     двойной-тап-зум на мобильных браузерах при быстрых нажатиях по клеткам. */
+  touch-action: manipulation;
 }
 
 .cell.light {
@@ -745,6 +772,9 @@ html[data-theme="cyberpunk"] .board-frame {
   align-items: center;
   justify-content: center;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  /* Как и у .cell — исключает задержку тапа и случайный зум при быстрых
+     последовательных нажатиях (характерно для многопрыжковых серий взятия). */
+  touch-action: manipulation;
 }
 
 .piece.white {
@@ -875,13 +905,6 @@ html[data-theme="cyberpunk"] .board-frame {
   cursor: pointer;
 }
 
-@media (max-width: 560px) {
-  .mode-option {
-    font-size: 0.72rem;
-    padding: 0.35rem 0.6rem;
-  }
-}
-
 /* ---------- Controls ---------- */
 .controls {
   display: flex;
@@ -925,10 +948,96 @@ html[data-theme="cyberpunk"] .board-frame {
   line-height: 1.5;
 }
 
-/* ---------- Responsive ---------- */
-@media (max-width: 420px) {
+/* ---------- Responsive: смартфоны (<= 600px) ---------- */
+@media (max-width: 600px) {
+  /* Меньше вертикальных отступов сверху экрана и между блоками — доска
+     должна помещаться на экран смартфона без долгой прокрутки. */
+  .table-felt {
+    padding-top: 0.75rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .header {
+    margin-bottom: 0.6rem;
+  }
+
+  .title {
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+  }
+
+  .subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+  }
+
+  .game {
+    gap: 0.7rem;
+  }
+
+  /* Компактный тулбар: режим игры / сложность / тема — меньше отступов
+     и переносимых элементов, чтобы не растягивать страницу по высоте. */
+  .toolbar {
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .mode-options {
+    padding: 0.25rem;
+    gap: 0.4rem;
+  }
+
+  .mode-option {
+    font-size: 0.68rem;
+    padding: 0.3rem 0.55rem;
+    gap: 0.35rem;
+  }
+
+  .theme-panel {
+    padding: 0.25rem 0.6rem;
+    gap: 0.35rem;
+  }
+
+  .theme-label {
+    font-size: 0.68rem;
+  }
+
+  /* Компактные выпадающие списки темы/сложности на мобильных */
+  .theme-select {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.1rem;
+  }
+
+  /* Статус-панель: не даём тексту вида "Белые — Ходит…" обрезаться —
+     блок переносится по словам вместо выхода за границы контейнера. */
+  .status-panel {
+    gap: 0.4rem;
+  }
+
+  .status-plate {
+    padding: 0.4rem 0.9rem;
+    gap: 0.4rem;
+  }
+
   .status-text {
-    font-size: 0.88rem;
+    font-size: 0.82rem;
+  }
+
+  .score-chip {
+    font-size: 0.7rem;
+    padding: 0.22rem 0.55rem;
+  }
+
+  .player-panel {
+    padding: 0.6rem;
+    gap: 0.5rem;
+  }
+
+  .player-name {
+    font-size: 0.85rem;
+  }
+
+  .player-status {
+    font-size: 0.7rem;
   }
 }
 
